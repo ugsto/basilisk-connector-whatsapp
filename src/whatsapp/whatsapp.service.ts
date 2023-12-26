@@ -21,9 +21,13 @@ export class WhatsappService implements OnModuleInit {
 
   private static messageListenerMutex = new Mutex();
 
+  private static chatListenerMutex = new Mutex();
+
   private client: Client;
 
-  private messageListeners: Record<
+  private messageListeners: Record<number, (message: Message) => void>;
+
+  private chatListeners: Record<
     string,
     Record<number, (message: Message) => void>
   >;
@@ -31,6 +35,7 @@ export class WhatsappService implements OnModuleInit {
   constructor() {
     this.client = WhatsappService.createClient();
     this.messageListeners = {};
+    this.chatListeners = {};
     this.registerClientEvents();
   }
 
@@ -38,35 +43,51 @@ export class WhatsappService implements OnModuleInit {
     await this.initializeClient();
   }
 
-  private addMessageListenerPreflight(chatId: string) {
+  async addMessageListener(
+    listener: (message: Message) => void,
+  ): Promise<number> {
+    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
+      const listenerId = WhatsappService.getListenerId(this.messageListeners);
+      this.messageListeners[listenerId] = listener;
+
+      return listenerId;
+    });
+  }
+
+  async removeMessageListener(listenerId: number) {
+    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
+      delete this.messageListeners[listenerId];
+    });
+  }
+
+  private addChatListenerPreflight(chatId: string) {
     if (!WhatsappService.chatIdRegex.test(chatId)) {
       throw new InvalidChatidFormatError(chatId);
     }
 
-    if (!this.messageListeners[chatId]) {
-      this.messageListeners[chatId] = {};
+    if (!this.chatListeners[chatId]) {
+      this.chatListeners[chatId] = {};
     }
   }
 
-  async addMessageListener(
-    chatId: string,
-    listener: (message: Message) => void,
-  ) {
-    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
-      this.addMessageListenerPreflight(chatId);
+  async addChatListener(chatId: string, listener: (message: Message) => void) {
+    return await WhatsappService.chatListenerMutex.runExclusive(async () => {
+      this.addChatListenerPreflight(chatId);
 
-      const listenerId = this.getMessageListenerId(chatId);
-      this.messageListeners[chatId][listenerId] = listener;
+      const listenerId = WhatsappService.getListenerId(
+        this.chatListeners[chatId],
+      );
+      this.chatListeners[chatId][listenerId] = listener;
 
       return `${chatId}:${listenerId}`;
     });
   }
 
-  async removeMessageListener(listenerId: string) {
+  async removeChatListener(listenerId: string) {
     const [chatId, listenerIdNumber] = listenerId.split(':');
 
-    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
-      delete this.messageListeners[chatId][listenerIdNumber];
+    return await WhatsappService.chatListenerMutex.runExclusive(async () => {
+      delete this.chatListeners[chatId][listenerIdNumber];
     });
   }
 
@@ -88,13 +109,13 @@ export class WhatsappService implements OnModuleInit {
       .then((sent) => sent.id._serialized);
   }
 
-  private getMessageListenerId(chatId: string) {
+  private static getListenerId(listeners: Record<number, any>) {
     const id = Array.from({
-      length: Object.keys(this.messageListeners[chatId]).length,
-    }).findIndex((_, i) => !this.messageListeners[chatId][i]);
+      length: Object.keys(listeners).length,
+    }).findIndex((_, i) => !listeners[i]);
 
     if (id === -1) {
-      return Object.keys(this.messageListeners[chatId]).length;
+      return Object.keys(listeners).length;
     }
 
     return id;
@@ -112,8 +133,11 @@ export class WhatsappService implements OnModuleInit {
   private async onNewMessage(message: WhatsappMessage) {
     const chatId = message.fromMe ? message.to : message.from;
 
-    if (this.messageListeners[chatId]) {
-      Object.values(this.messageListeners[chatId]).forEach((listener) =>
+    Object.values(this.messageListeners).forEach((listener) =>
+      listener(Message.fromWhatsappMessage(message)),
+    );
+    if (this.chatListeners[chatId]) {
+      Object.values(this.chatListeners[chatId]).forEach((listener) =>
         listener(Message.fromWhatsappMessage(message)),
       );
     }

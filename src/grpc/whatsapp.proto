@@ -20,11 +20,14 @@ message SendMessageResponse {
   string id = 1;
 }
 
+message SubscribeRequest {}
+
 message SubscribeToChatRequest {
   string chat_id = 1;
 }
 
 service WhatsAppService {
   rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+  rpc Subscribe (SubscribeRequest) returns (stream WhatsAppMessage);
   rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsAppMessage);
 }

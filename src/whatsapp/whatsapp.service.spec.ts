@@ -60,16 +60,45 @@ describe('WhatsappService', () => {
   describe('addMessageListener', () => {
     it('should add a message listener', async () => {
       const listener = jest.fn();
+
+      const listenerId = await whatsappService.addMessageListener(listener);
+
+      expect(listenerId).toBeDefined();
+      expect(whatsappService['messageListeners']).toHaveProperty(
+        listenerId.toString(),
+      );
+    });
+  });
+
+  describe('removeMessageListener', () => {
+    it('should remove a message listener', async () => {
+      const listener = jest.fn();
+
+      const listenerId = await whatsappService.addMessageListener(listener);
+      expect(whatsappService['messageListeners']).toHaveProperty(
+        listenerId.toString(),
+      );
+
+      await whatsappService.removeMessageListener(listenerId);
+      expect(whatsappService['messageListeners']).not.toHaveProperty(
+        listenerId.toString(),
+      );
+    });
+  });
+
+  describe('addChatListener', () => {
+    it('should add a message listener', async () => {
+      const listener = jest.fn();
       const chatId = '12345@c.us';
 
-      const listenerId = await whatsappService.addMessageListener(
+      const listenerId = await whatsappService.addChatListener(
         chatId,
         listener,
       );
       const [, listenerIdNumber] = listenerId.split(':');
 
       expect(listenerId).toBeDefined();
-      expect(whatsappService['messageListeners'][chatId]).toHaveProperty(
+      expect(whatsappService['chatListeners'][chatId]).toHaveProperty(
         listenerIdNumber,
       );
     });
@@ -79,27 +108,27 @@ describe('WhatsappService', () => {
       const listener = jest.fn();
 
       await expect(
-        whatsappService.addMessageListener(invalidChatId, listener),
+        whatsappService.addChatListener(invalidChatId, listener),
       ).rejects.toThrow(InvalidChatidFormatError);
     });
   });
 
-  describe('removeMessageListener', () => {
+  describe('removeChatListener', () => {
     it('should remove a message listener', async () => {
       const listener = jest.fn();
       const chatId = '12345@c.us';
 
-      const listenerId = await whatsappService.addMessageListener(
+      const listenerId = await whatsappService.addChatListener(
         chatId,
         listener,
       );
       const [, listenerIdNumber] = listenerId.split(':');
-      expect(whatsappService['messageListeners'][chatId]).toHaveProperty(
+      expect(whatsappService['chatListeners'][chatId]).toHaveProperty(
         listenerIdNumber,
       );
 
-      await whatsappService.removeMessageListener(listenerId);
-      expect(whatsappService['messageListeners'][chatId]).not.toHaveProperty(
+      await whatsappService.removeChatListener(listenerId);
+      expect(whatsappService['chatListeners'][chatId]).not.toHaveProperty(
         listenerIdNumber,
       );
     });

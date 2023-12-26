@@ -24,27 +24,40 @@ export class WhatsappController {
     };
   }
 
+  @GrpcMethod('WhatsAppService', 'Subscribe')
+  async subscribe() {
+    const subject = new Subject();
+
+    const onMessage = (message: Message) => {
+      subject.next(message);
+    };
+
+    const listenerId = await this.whatsappService.addMessageListener(onMessage);
+
+    return subject.asObservable().pipe(
+      finalize(() => {
+        this.whatsappService.removeMessageListener(listenerId);
+      }),
+    );
+  }
+
   @GrpcMethod('WhatsAppService', 'SubscribeToChat')
   async subscribeToChat(data: SubscribeToChatRequestDto) {
     const subject = new Subject();
     const { chatId } = data;
 
     const onMessage = (message: Message) => {
-      try {
-        subject.next(message);
-      } catch (error) {
-        console.error(error);
-      }
+      subject.next(message);
     };
 
-    const listenerId = await this.whatsappService.addMessageListener(
+    const listenerId = await this.whatsappService.addChatListener(
       chatId,
       onMessage,
     );
 
     return subject.asObservable().pipe(
       finalize(() => {
-        this.whatsappService.removeMessageListener(listenerId);
+        this.whatsappService.removeChatListener(listenerId);
       }),
     );
   }
