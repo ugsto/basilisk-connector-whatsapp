@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+package whatsapp;
+
+message WhatsAppMessage {
+  string id = 1;
+  string chat_id = 2;
+  string sender_id = 3;
+  string receiver_id = 4;
+  string content = 5;
+  int64 timestamp = 6;
+}
+
+message SendMessageRequest {
+  string chat_id = 1;
+  string content = 2;
+}
+
+message SendMessageResponse {
+  string id = 1;
+}
+
+service WhatsAppService {
+  rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+}
