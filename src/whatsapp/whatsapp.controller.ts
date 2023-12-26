@@ -10,7 +10,7 @@ import { Message } from './entities/whatsapp.entity';
 export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}
 
-  @GrpcMethod('WhatsAppService', 'SendMessage')
+  @GrpcMethod('Whatsapp', 'SendMessage')
   async sendMessage(data: SendMessageRequestDto) {
     const { chatId, content } = data;
 
@@ -24,7 +24,7 @@ export class WhatsappController {
     };
   }
 
-  @GrpcMethod('WhatsAppService', 'Subscribe')
+  @GrpcMethod('Whatsapp', 'Subscribe')
   async subscribe() {
     const subject = new Subject();
 
@@ -41,7 +41,7 @@ export class WhatsappController {
     );
   }
 
-  @GrpcMethod('WhatsAppService', 'SubscribeToChat')
+  @GrpcMethod('Whatsapp', 'SubscribeToChat')
   async subscribeToChat(data: SubscribeToChatRequestDto) {
     const subject = new Subject();
     const { chatId } = data;

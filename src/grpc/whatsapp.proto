@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package whatsapp;
 
-message WhatsAppMessage {
+message WhatsappMessage {
     string id = 1;
     string body = 2;
     string chat_id = 3;
@@ -26,8 +26,8 @@ message SubscribeToChatRequest {
   string chat_id = 1;
 }
 
-service WhatsAppService {
+service Whatsapp {
   rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
-  rpc Subscribe (SubscribeRequest) returns (stream WhatsAppMessage);
-  rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsAppMessage);
+  rpc Subscribe (SubscribeRequest) returns (stream WhatsappMessage);
+  rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsappMessage);
 }
