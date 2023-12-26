@@ -3,12 +3,12 @@ syntax = "proto3";
 package whatsapp;
 
 message WhatsAppMessage {
-  string id = 1;
-  string chat_id = 2;
-  string sender_id = 3;
-  string receiver_id = 4;
-  string content = 5;
-  int64 timestamp = 6;
+    string id = 1;
+    string body = 2;
+    string chat_id = 3;
+    string from = 4;
+    string to = 5;
+    int64 timestamp = 6;
 }
 
 message SendMessageRequest {
@@ -20,6 +20,11 @@ message SendMessageResponse {
   string id = 1;
 }
 
+message SubscribeToChatRequest {
+  string chat_id = 1;
+}
+
 service WhatsAppService {
   rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
+  rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsAppMessage);
 }
