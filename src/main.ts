@@ -9,6 +9,8 @@ async function bootstrap() {
 
   await app.startAllMicroservices();
   await app.listen(3000);
-  console.log(`Application is running on: ${await app.getUrl()}`);
+  console.log('gRPC: localhost:50051');
+  console.log('HTTP: localhost:3000');
+  console.log('Running...');
 }
 bootstrap();

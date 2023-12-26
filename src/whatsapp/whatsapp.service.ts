@@ -9,13 +9,16 @@ import { Mutex } from 'async-mutex';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
-  private static chatIdRegex = /^\d+@c.us$/;
+  private static chatIdRegex = /^\d+@[cg].us$/;
 
   private static createClient() {
     return new Client({
       authStrategy: new LocalAuth({
         dataPath: '/tmp/whatsapp',
       }),
+      puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      },
     });
   }
 
