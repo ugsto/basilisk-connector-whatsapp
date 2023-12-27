@@ -1,48 +1,87 @@
 syntax = "proto3";
 
+import "google/protobuf/empty.proto";
 package whatsapp;
 
-message WhatsappMessage {
+message TextMessage {
+  message Metadata {
     string id = 1;
-    string body = 2;
-    string chat_id = 3;
-    string from = 4;
-    string to = 5;
-    int64 timestamp = 6;
+    bool isFromMe = 2;
+    uint32 forwardingScore = 3;
+    bool isStarred = 4;
+    bool isStatus = 5;
+    uint32 timestamp = 6;
+    string chatId = 7;
+    string authorId = 8;
+    string toId = 9;
+  }
+
+  message Content {
+    message Link {
+      string link = 1;
+      bool isSuspicious = 2;
+    }
+
+    string body = 1;
+    repeated Link links = 2;
+    repeated string mentionedIds = 3;
+  }
+
+  Metadata metadata = 1;
+  Content content = 2;
+}
+
+message Chat {
+  string id = 1;
+  bool isArchived = 2;
+  bool isGroup = 3;
+  bool isMuted = 4;
+  bool isReadOnly = 5;
+  string name = 6;
+  uint32 muteExpiration = 7;
+  uint32 lastUpdateTimestamp = 8;
+  uint32 unreadCount = 9;
 }
 
 message SendMessageRequest {
-  string chat_id = 1;
-  string content = 2;
+  string chatId = 1;
+  string body = 2;
 }
 
 message SendMessageResponse {
   string id = 1;
 }
 
-message SubscribeRequest {}
-
-message SubscribeToChatRequest {
-  string chat_id = 1;
+message SubscribeToChatTextMessagesRequest {
+  string chatId = 1;
 }
 
-message ReactToMessageRequest {
-  string message_id = 1;
-  string reaction = 2;
+message SubscribeToAuthorTextMessagesRequest {
+  string authorId = 1;
 }
 
-message ReactToMessageResponse {}
-
-message UnreactToMessageRequest {
-  string message_id = 1;
+message GetChatsResponse {
+  repeated Chat chats = 1;
 }
 
-message UnreactToMessageResponse {}
+message ReactRequest {
+  string messageId = 1;
+  string emoji = 2;
+}
 
-service Whatsapp {
-  rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
-  rpc Subscribe (SubscribeRequest) returns (stream WhatsappMessage);
-  rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsappMessage);
-  rpc ReactToMessage (ReactToMessageRequest) returns (ReactToMessageResponse);
-  rpc UnreactToMessage (UnreactToMessageRequest) returns (UnreactToMessageResponse);
+message RemoveReactionRequest {
+  string messageId = 1;
+}
+
+service WhatsApp {
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+
+  rpc SubscribeToTextMessages(google.protobuf.Empty) returns (stream TextMessage);
+  rpc SubscribeToChatTextMessages(SubscribeToChatTextMessagesRequest) returns (stream TextMessage);
+  rpc SubscribeToAuthorTextMessages(SubscribeToAuthorTextMessagesRequest) returns (stream TextMessage);
+
+  rpc GetChats(google.protobuf.Empty) returns (GetChatsResponse);
+
+  rpc React(ReactRequest) returns (google.protobuf.Empty);
+  rpc RemoveReaction(RemoveReactionRequest) returns (google.protobuf.Empty);
 }

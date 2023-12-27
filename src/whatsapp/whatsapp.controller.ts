@@ -1,80 +1,110 @@
 import { Controller } from '@nestjs/common';
-import { WhatsappService } from './whatsapp.service';
 import { GrpcMethod } from '@nestjs/microservices';
-import { SubscribeToChatRequestDto } from './dto/subscribe-to-chat-request.dto';
+import { WhatsappProvider } from './whatsapp.provider';
+import { WhatsappService } from './whatsapp.service';
 import { Subject, finalize } from 'rxjs';
-import { SendMessageRequestDto } from './dto/send-message-request.dto';
-import { Message } from './entities/whatsapp.entity';
-import { ReactToMessageRequestDto } from './dto/react-to-message-request.dto';
-import { UnreactToMessageRequestDto } from './dto/unreact-to-message-request.dto';
 
 @Controller()
 export class WhatsappController {
-  constructor(private readonly whatsappService: WhatsappService) {}
+  private whatsappServicePromise: Promise<WhatsappService>;
 
-  @GrpcMethod('Whatsapp', 'SendMessage')
-  async sendMessage(data: SendMessageRequestDto) {
-    const { chatId, content } = data;
+  constructor(private readonly whatsappProvider: WhatsappProvider) {
+    this.whatsappServicePromise = this.whatsappProvider.getWhatsappService();
+  }
 
-    const sentMessageId = await this.whatsappService.sendMessage(
-      chatId,
-      content,
-    );
+  private async whatsappService() {
+    return await this.whatsappServicePromise;
+  }
+
+  @GrpcMethod('WhatsApp', 'SendMessage')
+  async sendMessage({ chatId, body }: { chatId: string; body: string }) {
+    const service = await this.whatsappService();
+
+    const sentMessageId = await service.sendMessage({ chatId, message: body });
 
     return {
       id: sentMessageId,
     };
   }
 
-  @GrpcMethod('Whatsapp', 'Subscribe')
-  async subscribe() {
+  @GrpcMethod('WhatsApp', 'SubscribeToTextMessages')
+  async subscribeToTextMessages() {
     const subject = new Subject();
+    const service = await this.whatsappService();
 
-    const onMessage = (message: Message) => {
+    const handlerId = await service.addGlobalMessageHandler((message) => {
       subject.next(message);
-    };
-
-    const listenerId = await this.whatsappService.addMessageListener(onMessage);
+    });
 
     return subject.asObservable().pipe(
       finalize(() => {
-        this.whatsappService.removeMessageListener(listenerId);
+        service.removeGlobalMessageHandler(handlerId);
       }),
     );
   }
 
-  @GrpcMethod('Whatsapp', 'SubscribeToChat')
-  async subscribeToChat(data: SubscribeToChatRequestDto) {
+  @GrpcMethod('WhatsApp', 'SubscribeToChatTextMessages')
+  async subscribeToChatTextMessages({ chatId }: { chatId: string }) {
     const subject = new Subject();
-    const { chatId } = data;
+    const service = await this.whatsappService();
 
-    const onMessage = (message: Message) => {
-      subject.next(message);
-    };
-
-    const listenerId = await this.whatsappService.addChatListener(
+    const handlerId = await service.addChatMessageHandler({
       chatId,
-      onMessage,
-    );
+      handler(message) {
+        subject.next(message);
+      },
+    });
 
     return subject.asObservable().pipe(
       finalize(() => {
-        this.whatsappService.removeChatListener(listenerId);
+        service.removeChatMessageHandler({ chatId, id: handlerId });
       }),
     );
   }
 
-  @GrpcMethod('Whatsapp', 'ReactToMessage')
-  async reactToMessage(data: ReactToMessageRequestDto) {
-    const { messageId, reaction } = data;
+  @GrpcMethod('WhatsApp', 'SubscribeToAuthorTextMessages')
+  async subscribeToAuthorTextMessages({ authorId }: { authorId: string }) {
+    const subject = new Subject();
+    const service = await this.whatsappService();
 
-    await this.whatsappService.reactToMessage(messageId, reaction);
+    const handlerId = await service.addAuthorMessageHandler({
+      authorId,
+      handler(message) {
+        subject.next(message);
+      },
+    });
+
+    return subject.asObservable().pipe(
+      finalize(() => {
+        service.removeAuthorMessageHandler({ authorId, id: handlerId });
+      }),
+    );
   }
 
-  @GrpcMethod('Whatsapp', 'UnreactToMessage')
-  async unreactToMessage(data: UnreactToMessageRequestDto) {
-    const { messageId } = data;
+  @GrpcMethod('WhatsApp', 'GetChats')
+  async getChats() {
+    const service = await this.whatsappService();
 
-    await this.whatsappService.unreactToMessage(messageId);
+    return await service.getChats();
+  }
+
+  @GrpcMethod('WhatsApp', 'React')
+  async reactToMessage({
+    messageId,
+    emoji,
+  }: {
+    messageId: string;
+    emoji: string;
+  }) {
+    const service = await this.whatsappService();
+
+    await service.reactToMessage({ messageId, emoji });
+  }
+
+  @GrpcMethod('WhatsApp', 'RemoveReaction')
+  async removeReactionToMessage({ messageId }: { messageId: string }) {
+    const service = await this.whatsappService();
+
+    await service.removeReactionToMessage({ messageId });
   }
 }

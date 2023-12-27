@@ -1,8 +1,8 @@
 import { Module } from '@nestjs/common';
-import { WhatsappService } from './whatsapp.service';
 import { WhatsappController } from './whatsapp.controller';
 import { ClientsModule } from '@nestjs/microservices';
 import { grpcClientOptions } from '../grpc-client.options';
+import { WhatsappProvider } from './whatsapp.provider';
 
 @Module({
   imports: [
@@ -11,6 +11,6 @@ import { grpcClientOptions } from '../grpc-client.options';
     ]),
   ],
   controllers: [WhatsappController],
-  providers: [WhatsappService],
+  providers: [WhatsappProvider],
 })
 export class WhatsappModule {}

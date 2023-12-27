@@ -1,179 +1,157 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
-import * as qrcode from 'qrcode-terminal';
-import { Client, LocalAuth } from 'whatsapp-web.js';
-import { MessageTooLongError } from './errors/message-too-long.error';
-import { InvalidChatidFormatError } from './errors/invalid-chatid-format.error';
-import { Message } from './entities/whatsapp.entity';
-import { Message as WhatsappMessage } from 'whatsapp-web.js';
-import { Mutex } from 'async-mutex';
-import { isEmoji } from '../utils/is-emoji.util';
-import { InvalidReactionError } from './errors/invalid-reaction.error';
+import { Client, Message, MessageTypes } from 'whatsapp-web.js';
+import { TextMessage } from './entities/text-message.entity';
+import { TextMessageHandlerManager } from './entities/text-message-handler-manager.entity';
+import { TextMessageHandler } from './types/text-message-handler.type';
+import { Chat } from './entities/chat.entity';
+import { checkMessageSize } from './decorators/check-message-size.decorator';
+import { validateChatId } from './decorators/validate-chatid.decorator';
+import { validateEmoji } from './decorators/validate-emoji.decorator';
 
-@Injectable()
-export class WhatsappService implements OnModuleInit {
-  private static chatIdRegex = /^\d+@[cg].us$/;
+export class WhatsappService {
+  private globalMessageHandlerManager: TextMessageHandlerManager;
+  private chatMessageHandlerManager: Map<string, TextMessageHandlerManager>;
+  private authorMessageHandlerManager: Map<string, TextMessageHandlerManager>;
 
-  private static messageListenerMutex = new Mutex();
+  constructor(private readonly client: Client) {
+    this.globalMessageHandlerManager = new TextMessageHandlerManager();
+    this.chatMessageHandlerManager = new Map();
+    this.authorMessageHandlerManager = new Map();
 
-  private static chatListenerMutex = new Mutex();
-
-  private client: Client;
-
-  private messageListeners: Record<number, (message: Message) => void>;
-
-  private chatListeners: Record<
-    string,
-    Record<number, (message: Message) => void>
-  >;
-
-  constructor() {
-    this.client = WhatsappService.createClient();
-    this.messageListeners = {};
-    this.chatListeners = {};
-    this.registerClientEvents();
+    this.setupMessageListener();
   }
 
-  async onModuleInit() {
-    await this.initializeClient();
+  @checkMessageSize('message', 4096)
+  @validateChatId('chatId')
+  async sendMessage({ chatId, message }: { chatId: string; message: string }) {
+    const sentMessage = await this.client.sendMessage(chatId, message);
+
+    return sentMessage.id._serialized;
   }
 
-  private async initializeClient() {
-    await this.client.initialize();
+  async addGlobalMessageHandler(handler: TextMessageHandler) {
+    return this.globalMessageHandlerManager.addHandler(handler);
   }
 
-  private registerClientEvents() {
-    this.client.on('qr', (qr) => {
-      qrcode.generate(qr, { small: true });
-    });
-
-    this.client.on('disconnected', this.reconnect.bind(this));
-    this.client.on('message_create', this.onNewMessage.bind(this));
+  async removeGlobalMessageHandler(id: number) {
+    this.globalMessageHandlerManager.removeHandler(id);
   }
 
-  private static createClient() {
-    return new Client({
-      authStrategy: new LocalAuth({
-        dataPath: '/tmp/whatsapp',
-      }),
-      puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      },
-    });
-  }
-
-  private async reconnect() {
-    await this.client.destroy().catch(() => {});
-    this.client = WhatsappService.createClient();
-    this.registerClientEvents();
-    await this.initializeClient();
-  }
-
-  async addMessageListener(
-    listener: (message: Message) => void,
-  ): Promise<number> {
-    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
-      const listenerId = WhatsappService.getListenerId(this.messageListeners);
-      this.messageListeners[listenerId] = listener;
-
-      return listenerId;
-    });
-  }
-
-  async removeMessageListener(listenerId: number) {
-    return await WhatsappService.messageListenerMutex.runExclusive(async () => {
-      delete this.messageListeners[listenerId];
-    });
-  }
-
-  private static validateChatIdFormat(chatId: string) {
-    if (!WhatsappService.chatIdRegex.test(chatId)) {
-      throw new InvalidChatidFormatError(chatId);
-    }
-  }
-
-  private addChatListenerPreflight(chatId: string) {
-    WhatsappService.validateChatIdFormat(chatId);
-
-    if (!this.chatListeners[chatId]) {
-      this.chatListeners[chatId] = {};
-    }
-  }
-
-  async addChatListener(chatId: string, listener: (message: Message) => void) {
-    return await WhatsappService.chatListenerMutex.runExclusive(async () => {
-      this.addChatListenerPreflight(chatId);
-
-      const listenerId = WhatsappService.getListenerId(
-        this.chatListeners[chatId],
-      );
-      this.chatListeners[chatId][listenerId] = listener;
-
-      return `${chatId}:${listenerId}`;
-    });
-  }
-
-  async removeChatListener(listenerId: string) {
-    const [chatId, listenerIdNumber] = listenerId.split(':');
-
-    return await WhatsappService.chatListenerMutex.runExclusive(async () => {
-      delete this.chatListeners[chatId][listenerIdNumber];
-    });
-  }
-
-  private sendMessagePreflight(to: string, message: string) {
-    if (message.length > 4096) {
-      throw new MessageTooLongError(message.length);
-    }
-
-    WhatsappService.validateChatIdFormat(to);
-  }
-
-  async sendMessage(to: string, message: string) {
-    this.sendMessagePreflight(to, message);
-
-    return await this.client
-      .sendMessage(to, message)
-      .then((sent) => sent.id._serialized);
-  }
-
-  private async onNewMessage(message: WhatsappMessage) {
-    const chatId = message.fromMe ? message.to : message.from;
-
-    Object.values(this.messageListeners).forEach((listener) =>
-      listener(Message.fromWhatsappMessage(message)),
-    );
-    if (this.chatListeners[chatId]) {
-      Object.values(this.chatListeners[chatId]).forEach((listener) =>
-        listener(Message.fromWhatsappMessage(message)),
+  @validateChatId('chatId')
+  async addChatMessageHandler({
+    chatId,
+    handler,
+  }: {
+    chatId: string;
+    handler: TextMessageHandler;
+  }) {
+    if (!this.chatMessageHandlerManager.has(chatId)) {
+      this.chatMessageHandlerManager.set(
+        chatId,
+        new TextMessageHandlerManager(),
       );
     }
+
+    return this.chatMessageHandlerManager.get(chatId)?.addHandler(handler);
   }
 
-  async reactToMessage(messageId: string, reaction: string) {
-    if (!isEmoji(reaction)) {
-      throw new InvalidReactionError(reaction);
+  @validateChatId('chatId')
+  async removeChatMessageHandler({
+    chatId,
+    id,
+  }: {
+    chatId: string;
+    id: number;
+  }) {
+    this.chatMessageHandlerManager.get(chatId)?.removeHandler(id);
+  }
+
+  @validateChatId('authorId')
+  async addAuthorMessageHandler({
+    authorId,
+    handler,
+  }: {
+    authorId: string;
+    handler: TextMessageHandler;
+  }) {
+    if (!this.authorMessageHandlerManager.has(authorId)) {
+      this.authorMessageHandlerManager.set(
+        authorId,
+        new TextMessageHandlerManager(),
+      );
     }
 
-    await this.client
-      .getMessageById(messageId)
-      .then((message) => message.react(reaction));
+    return this.authorMessageHandlerManager.get(authorId)?.addHandler(handler);
   }
 
-  async unreactToMessage(messageId: string) {
-    await this.client
-      .getMessageById(messageId)
-      .then((message) => message.react(''));
+  @validateChatId('authorId')
+  async removeAuthorMessageHandler({
+    authorId,
+    id,
+  }: {
+    authorId: string;
+    id: number;
+  }) {
+    this.authorMessageHandlerManager.get(authorId)?.removeHandler(id);
   }
 
-  private static getListenerId(listeners: Record<number, any>) {
-    const id = Array.from({
-      length: Object.keys(listeners).length,
-    }).findIndex((_, i) => !listeners[i]);
+  async getChats() {
+    const chats = await this.client
+      .getChats()
+      .then((chat) => chat.map(Chat.fromWhatsappChat));
 
-    if (id === -1) {
-      return Object.keys(listeners).length;
+    return { chats };
+  }
+
+  @validateEmoji('emoji')
+  async reactToMessage({
+    messageId,
+    emoji,
+  }: {
+    messageId: string;
+    emoji: string;
+  }) {
+    await this.client.getMessageById(messageId).then((message) => {
+      message.react(emoji);
+    });
+  }
+
+  async removeReactionToMessage({ messageId }: { messageId: string }) {
+    await this.client.getMessageById(messageId).then((message) => {
+      message.react('');
+    });
+  }
+
+  private setupMessageListener() {
+    this.client.on('message_create', (message) => {
+      this.onNewMessage(message);
+    });
+  }
+
+  private onNewMessage(message: Message) {
+    switch (message.type) {
+      case MessageTypes.TEXT: {
+        this.onNewTextMessage(TextMessage.fromWhatsappMessage(message));
+        break;
+      }
+      default: {
+        break;
+      }
     }
+  }
 
-    return id;
+  private onNewTextMessage(message: TextMessage) {
+    this.globalMessageHandlerManager
+      .getHandlers()
+      .forEach((handler) => handler(message));
+
+    this.chatMessageHandlerManager
+      .get(message.metadata.chatId)
+      ?.getHandlers()
+      .forEach((handler) => handler(message));
+
+    this.authorMessageHandlerManager
+      .get(message.metadata.authorId)
+      ?.getHandlers()
+      .forEach((handler) => handler(message));
   }
 }
