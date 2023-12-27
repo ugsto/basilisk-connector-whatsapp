@@ -16,7 +16,7 @@ export class WhatsappController {
     return await this.whatsappServicePromise;
   }
 
-  @GrpcMethod('WhatsApp', 'SendMessage')
+  @GrpcMethod('Whatsapp', 'SendMessage')
   async sendMessage({ chatId, body }: { chatId: string; body: string }) {
     const service = await this.whatsappService();
 
@@ -27,7 +27,7 @@ export class WhatsappController {
     };
   }
 
-  @GrpcMethod('WhatsApp', 'SubscribeToTextMessages')
+  @GrpcMethod('Whatsapp', 'SubscribeToTextMessages')
   async subscribeToTextMessages() {
     const subject = new Subject();
     const service = await this.whatsappService();
@@ -43,7 +43,7 @@ export class WhatsappController {
     );
   }
 
-  @GrpcMethod('WhatsApp', 'SubscribeToChatTextMessages')
+  @GrpcMethod('Whatsapp', 'SubscribeToChatTextMessages')
   async subscribeToChatTextMessages({ chatId }: { chatId: string }) {
     const subject = new Subject();
     const service = await this.whatsappService();
@@ -62,7 +62,7 @@ export class WhatsappController {
     );
   }
 
-  @GrpcMethod('WhatsApp', 'SubscribeToAuthorTextMessages')
+  @GrpcMethod('Whatsapp', 'SubscribeToAuthorTextMessages')
   async subscribeToAuthorTextMessages({ authorId }: { authorId: string }) {
     const subject = new Subject();
     const service = await this.whatsappService();
@@ -81,14 +81,14 @@ export class WhatsappController {
     );
   }
 
-  @GrpcMethod('WhatsApp', 'GetChats')
+  @GrpcMethod('Whatsapp', 'GetChats')
   async getChats() {
     const service = await this.whatsappService();
 
     return await service.getChats();
   }
 
-  @GrpcMethod('WhatsApp', 'React')
+  @GrpcMethod('Whatsapp', 'React')
   async reactToMessage({
     messageId,
     emoji,
@@ -101,7 +101,7 @@ export class WhatsappController {
     await service.reactToMessage({ messageId, emoji });
   }
 
-  @GrpcMethod('WhatsApp', 'RemoveReaction')
+  @GrpcMethod('Whatsapp', 'RemoveReaction')
   async removeReactionToMessage({ messageId }: { messageId: string }) {
     const service = await this.whatsappService();
 

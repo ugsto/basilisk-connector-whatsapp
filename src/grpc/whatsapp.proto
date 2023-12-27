@@ -73,7 +73,7 @@ message RemoveReactionRequest {
   string messageId = 1;
 }
 
-service WhatsApp {
+service Whatsapp {
   rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
 
   rpc SubscribeToTextMessages(google.protobuf.Empty) returns (stream TextMessage);
