@@ -6,21 +6,12 @@ import { InvalidChatidFormatError } from './errors/invalid-chatid-format.error';
 import { Message } from './entities/whatsapp.entity';
 import { Message as WhatsappMessage } from 'whatsapp-web.js';
 import { Mutex } from 'async-mutex';
+import { isEmoji } from '../utils/is-emoji.util';
+import { InvalidReactionError } from './errors/invalid-reaction.error';
 
 @Injectable()
 export class WhatsappService implements OnModuleInit {
   private static chatIdRegex = /^\d+@[cg].us$/;
-
-  private static createClient() {
-    return new Client({
-      authStrategy: new LocalAuth({
-        dataPath: '/tmp/whatsapp',
-      }),
-      puppeteer: {
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-      },
-    });
-  }
 
   private static messageListenerMutex = new Mutex();
 
@@ -46,6 +37,37 @@ export class WhatsappService implements OnModuleInit {
     await this.initializeClient();
   }
 
+  private async initializeClient() {
+    await this.client.initialize();
+  }
+
+  private registerClientEvents() {
+    this.client.on('qr', (qr) => {
+      qrcode.generate(qr, { small: true });
+    });
+
+    this.client.on('disconnected', this.reconnect.bind(this));
+    this.client.on('message_create', this.onNewMessage.bind(this));
+  }
+
+  private static createClient() {
+    return new Client({
+      authStrategy: new LocalAuth({
+        dataPath: '/tmp/whatsapp',
+      }),
+      puppeteer: {
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      },
+    });
+  }
+
+  private async reconnect() {
+    await this.client.destroy().catch(() => {});
+    this.client = WhatsappService.createClient();
+    this.registerClientEvents();
+    await this.initializeClient();
+  }
+
   async addMessageListener(
     listener: (message: Message) => void,
   ): Promise<number> {
@@ -63,10 +85,14 @@ export class WhatsappService implements OnModuleInit {
     });
   }
 
-  private addChatListenerPreflight(chatId: string) {
+  private static validateChatIdFormat(chatId: string) {
     if (!WhatsappService.chatIdRegex.test(chatId)) {
       throw new InvalidChatidFormatError(chatId);
     }
+  }
+
+  private addChatListenerPreflight(chatId: string) {
+    WhatsappService.validateChatIdFormat(chatId);
 
     if (!this.chatListeners[chatId]) {
       this.chatListeners[chatId] = {};
@@ -99,9 +125,7 @@ export class WhatsappService implements OnModuleInit {
       throw new MessageTooLongError(message.length);
     }
 
-    if (!WhatsappService.chatIdRegex.test(to)) {
-      throw new InvalidChatidFormatError(to);
-    }
+    WhatsappService.validateChatIdFormat(to);
   }
 
   async sendMessage(to: string, message: string) {
@@ -110,27 +134,6 @@ export class WhatsappService implements OnModuleInit {
     return await this.client
       .sendMessage(to, message)
       .then((sent) => sent.id._serialized);
-  }
-
-  private static getListenerId(listeners: Record<number, any>) {
-    const id = Array.from({
-      length: Object.keys(listeners).length,
-    }).findIndex((_, i) => !listeners[i]);
-
-    if (id === -1) {
-      return Object.keys(listeners).length;
-    }
-
-    return id;
-  }
-
-  private registerClientEvents() {
-    this.client.on('qr', (qr) => {
-      qrcode.generate(qr, { small: true });
-    });
-
-    this.client.on('disconnected', this.reconnect.bind(this));
-    this.client.on('message_create', this.onNewMessage.bind(this));
   }
 
   private async onNewMessage(message: WhatsappMessage) {
@@ -146,14 +149,31 @@ export class WhatsappService implements OnModuleInit {
     }
   }
 
-  private async initializeClient() {
-    await this.client.initialize();
+  async reactToMessage(messageId: string, reaction: string) {
+    if (!isEmoji(reaction)) {
+      throw new InvalidReactionError(reaction);
+    }
+
+    await this.client
+      .getMessageById(messageId)
+      .then((message) => message.react(reaction));
   }
 
-  private async reconnect() {
-    await this.client.destroy().catch(() => {});
-    this.client = WhatsappService.createClient();
-    this.registerClientEvents();
-    await this.initializeClient();
+  async unreactToMessage(messageId: string) {
+    await this.client
+      .getMessageById(messageId)
+      .then((message) => message.react(''));
+  }
+
+  private static getListenerId(listeners: Record<number, any>) {
+    const id = Array.from({
+      length: Object.keys(listeners).length,
+    }).findIndex((_, i) => !listeners[i]);
+
+    if (id === -1) {
+      return Object.keys(listeners).length;
+    }
+
+    return id;
   }
 }

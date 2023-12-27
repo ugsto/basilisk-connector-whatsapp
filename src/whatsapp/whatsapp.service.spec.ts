@@ -39,6 +39,51 @@ describe('WhatsappService', () => {
       expect(clientSpy).toHaveBeenCalledWith(to, message);
     });
 
+    describe('reactToMessage', () => {
+      it('should react to a message using the client', async () => {
+        const messageId = 'msg-id-123';
+        const reaction = '👍';
+
+        const reactSpy = jest.fn();
+        const getMessageByIdSpy = jest
+          .spyOn(whatsappService['client'], 'getMessageById')
+          .mockReturnValue(
+            new Promise((resolve) =>
+              resolve({
+                react: reactSpy,
+              } as any),
+            ),
+          );
+
+        await whatsappService.reactToMessage(messageId, reaction);
+
+        expect(getMessageByIdSpy).toHaveBeenCalledWith(messageId);
+        expect(reactSpy).toHaveBeenCalledWith(reaction);
+      });
+    });
+
+    describe('unreactToMessage', () => {
+      it('should remove a reaction from a message using the client', async () => {
+        const messageId = 'msg-id-456';
+
+        const reactSpy = jest.fn();
+        const getMessageByIdSpy = jest
+          .spyOn(whatsappService['client'], 'getMessageById')
+          .mockReturnValue(
+            new Promise((resolve) =>
+              resolve({
+                react: reactSpy,
+              } as any),
+            ),
+          );
+
+        await whatsappService.unreactToMessage(messageId);
+
+        expect(getMessageByIdSpy).toHaveBeenCalledWith(messageId);
+        expect(reactSpy).toHaveBeenCalledWith('');
+      });
+    });
+
     it('should throw MessageTooLongError if the message is too long', async () => {
       const to = '12345@c.us';
       const longMessage = 'a'.repeat(5000);

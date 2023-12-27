@@ -4,13 +4,14 @@ import { MicroserviceOptions } from '@nestjs/microservices';
 import { grpcClientOptions } from './grpc-client.options';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  app.connectMicroservice<MicroserviceOptions>(grpcClientOptions);
+  const app = await NestFactory.createMicroservice<MicroserviceOptions>(
+    AppModule,
+    grpcClientOptions,
+  );
 
-  await app.startAllMicroservices();
-  await app.listen(3000);
-  console.log('gRPC: localhost:50051');
-  console.log('HTTP: localhost:3000');
-  console.log('Running...');
+  await app.listen();
+
+  console.log(`Listening on ${grpcClientOptions.options.url}`);
 }
+
 bootstrap();

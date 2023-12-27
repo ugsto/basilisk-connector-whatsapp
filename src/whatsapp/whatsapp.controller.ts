@@ -5,6 +5,8 @@ import { SubscribeToChatRequestDto } from './dto/subscribe-to-chat-request.dto';
 import { Subject, finalize } from 'rxjs';
 import { SendMessageRequestDto } from './dto/send-message-request.dto';
 import { Message } from './entities/whatsapp.entity';
+import { ReactToMessageRequestDto } from './dto/react-to-message-request.dto';
+import { UnreactToMessageRequestDto } from './dto/unreact-to-message-request.dto';
 
 @Controller()
 export class WhatsappController {
@@ -60,5 +62,19 @@ export class WhatsappController {
         this.whatsappService.removeChatListener(listenerId);
       }),
     );
+  }
+
+  @GrpcMethod('Whatsapp', 'ReactToMessage')
+  async reactToMessage(data: ReactToMessageRequestDto) {
+    const { messageId, reaction } = data;
+
+    await this.whatsappService.reactToMessage(messageId, reaction);
+  }
+
+  @GrpcMethod('Whatsapp', 'UnreactToMessage')
+  async unreactToMessage(data: UnreactToMessageRequestDto) {
+    const { messageId } = data;
+
+    await this.whatsappService.unreactToMessage(messageId);
   }
 }

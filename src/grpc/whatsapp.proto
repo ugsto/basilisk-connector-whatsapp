@@ -26,8 +26,23 @@ message SubscribeToChatRequest {
   string chat_id = 1;
 }
 
+message ReactToMessageRequest {
+  string message_id = 1;
+  string reaction = 2;
+}
+
+message ReactToMessageResponse {}
+
+message UnreactToMessageRequest {
+  string message_id = 1;
+}
+
+message UnreactToMessageResponse {}
+
 service Whatsapp {
   rpc SendMessage (SendMessageRequest) returns (SendMessageResponse);
   rpc Subscribe (SubscribeRequest) returns (stream WhatsappMessage);
   rpc SubscribeToChat (SubscribeToChatRequest) returns (stream WhatsappMessage);
+  rpc ReactToMessage (ReactToMessageRequest) returns (ReactToMessageResponse);
+  rpc UnreactToMessage (UnreactToMessageRequest) returns (UnreactToMessageResponse);
 }
